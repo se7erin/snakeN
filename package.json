@@ -4,7 +4,7 @@
   "description": "A 3D version of the classic Snake game using Three.js",
   "main": "index.js",
   "scripts": {
-    "start": "http-server dist -o",
+    "start": "http-server dist -o -a localhost -c-1 -i index.html",
     "build": "webpack --mode production",
     "dev": "webpack serve --mode development --open"
   },

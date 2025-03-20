@@ -7,8 +7,14 @@ export class Snake {
         this.segments = [];
         this.direction = 'right'; // Default direction
         this.nextDirection = 'right';
-        this.moveTime = 0.2; // Seconds between movements (speed)
+        this.moveTime = 0.2; // Slightly slower for more visible animation
         this.timeSinceLastMove = 0;
+        this.pendingDirectionChange = false;
+        this.queuedDirection = null;
+        
+        // Always be in motion - no stopping between grid positions
+        this.isMoving = true;
+        this.movementProgress = 0;
         
         // Colors for snake segments
         this.headColor = 0x4CAF50; // Green for head
@@ -27,6 +33,20 @@ export class Snake {
         // Reset direction
         this.direction = 'right';
         this.nextDirection = 'right';
+        this.pendingDirectionChange = false;
+        this.queuedDirection = null;
+        
+        // Always be in motion
+        this.isMoving = true;
+        this.movementProgress = 0;
+        
+        // Setup initial target positions
+        this.calculateNextTargetPositions();
+        
+        // Store initial positions as previous positions
+        this.segments.forEach(segment => {
+            segment.previousPosition = { ...segment.position };
+        });
     }
     
     createSegment(position, isHead = false) {
@@ -50,68 +70,114 @@ export class Snake {
         // Store both the mesh and the grid position
         this.segments.push({
             mesh: segment,
-            position: { ...position }
+            position: { ...position },
+            targetPosition: { ...position },
+            previousPosition: { ...position }
         });
     }
     
     update(delta) {
-        // Accumulate time since last move
-        this.timeSinceLastMove += delta;
+        // Advance the movement progress
+        this.movementProgress += delta / this.moveTime;
         
-        // Move snake if enough time has passed
-        if (this.timeSinceLastMove >= this.moveTime) {
-            this.move();
-            this.timeSinceLastMove = 0;
+        // If we've reached or exceeded the target position
+        if (this.movementProgress >= 1) {
+            // Complete the current movement
+            this.completeMovement();
+            
+            // Apply any pending direction change
+            if (this.pendingDirectionChange) {
+                this.nextDirection = this.queuedDirection;
+                this.pendingDirectionChange = false;
+            }
+            
+            // Calculate new target positions
+            this.calculateNextTargetPositions();
+            
+            // Reset movement progress and continue moving
+            this.movementProgress = 0;
         }
+        
+        // Interpolate positions (happens every frame)
+        this.interpolatePositions(this.movementProgress);
     }
     
-    move() {
-        // Update direction from next direction (set by user input)
+    calculateNextTargetPositions() {
+        // Update direction
         this.direction = this.nextDirection;
         
-        // Get current head position
-        const head = this.segments[0];
-        const newHeadPosition = { ...head.position };
+        // Store current positions as previous positions
+        this.segments.forEach(segment => {
+            segment.previousPosition = { ...segment.position };
+        });
         
-        // Calculate new head position based on direction
+        // Calculate new head target position
+        const headTargetPosition = { ...this.segments[0].position };
+        
         switch (this.direction) {
             case 'up':
-                newHeadPosition.z -= 1;
+                headTargetPosition.z -= 1;
                 break;
             case 'down':
-                newHeadPosition.z += 1;
+                headTargetPosition.z += 1;
                 break;
             case 'left':
-                newHeadPosition.x -= 1;
+                headTargetPosition.x -= 1;
                 break;
             case 'right':
-                newHeadPosition.x += 1;
+                headTargetPosition.x += 1;
                 break;
         }
         
-        // Move all segments (each segment takes the position of the segment in front of it)
+        // Set target positions (each segment moves to the position of the segment in front)
         for (let i = this.segments.length - 1; i > 0; i--) {
             const segment = this.segments[i];
             const prevSegment = this.segments[i - 1];
             
-            // Update grid position
-            segment.position.x = prevSegment.position.x;
-            segment.position.y = prevSegment.position.y;
-            segment.position.z = prevSegment.position.z;
-            
-            // Update world position
-            const worldPos = this.gridSystem.gridToWorld(segment.position);
-            segment.mesh.position.set(worldPos.x, worldPos.y, worldPos.z);
+            segment.targetPosition = { ...prevSegment.position };
         }
         
-        // Update head position
-        head.position.x = newHeadPosition.x;
-        head.position.y = newHeadPosition.y;
-        head.position.z = newHeadPosition.z;
+        // Set head target position
+        this.segments[0].targetPosition = headTargetPosition;
+    }
+    
+    completeMovement() {
+        // Update actual grid positions to match target positions
+        this.segments.forEach(segment => {
+            segment.position = { ...segment.targetPosition };
+        });
+    }
+    
+    interpolatePositions(t) {
+        // Use smooth interpolation with a sine-based easing for more fluid motion
+        const smoothT = this.smootherStep(t);
         
-        // Update head world position
-        const worldPos = this.gridSystem.gridToWorld(head.position);
-        head.mesh.position.set(worldPos.x, worldPos.y, worldPos.z);
+        // Update visual positions of all segments
+        this.segments.forEach(segment => {
+            const worldPrevPos = this.gridSystem.gridToWorld(segment.previousPosition);
+            const worldTargetPos = this.gridSystem.gridToWorld(segment.targetPosition);
+            
+            // Interpolate between previous and target positions
+            segment.mesh.position.x = this.lerp(worldPrevPos.x, worldTargetPos.x, smoothT);
+            segment.mesh.position.y = this.lerp(worldPrevPos.y, worldTargetPos.y, smoothT);
+            segment.mesh.position.z = this.lerp(worldPrevPos.z, worldTargetPos.z, smoothT);
+        });
+    }
+    
+    lerp(a, b, t) {
+        return a + (b - a) * t;
+    }
+    
+    // Smoother and more fluid easing function
+    smootherStep(t) {
+        // Smoother step provides a more continuous feel
+        return t * t * t * (t * (t * 6 - 15) + 10);
+    }
+    
+    // Alternative easing function that simulates a snake-like movement
+    snakeEasing(t) {
+        // Sine-based easing that starts and ends smoothly
+        return 0.5 - 0.5 * Math.cos(Math.PI * t);
     }
     
     grow() {
@@ -131,7 +197,15 @@ export class Snake {
             return;
         }
         
-        this.nextDirection = newDirection;
+        // Always queue the input
+        this.queuedDirection = newDirection;
+        this.pendingDirectionChange = true;
+        
+        // If we're in the first 10% of movement, apply immediately for more responsive feel
+        if (this.movementProgress < 0.1) {
+            this.nextDirection = newDirection;
+            this.pendingDirectionChange = false;
+        }
     }
     
     getHeadPosition() {
