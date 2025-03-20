@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snake 3D</title>
+</head>
+<body>
+    <div id="game-container">
+        <div id="menu" class="screen">
+            <h1>Snake 3D</h1>
+            <button id="start-game">Start Game</button>
+            <div class="instructions">
+                <h2>Instructions</h2>
+                <p>Use arrow keys or WASD to control the snake.</p>
+                <p>Eat food to grow longer.</p>
+                <p>Reach length 5 to make a special item appear.</p>
+                <p>Eat the special item to unlock the exit door.</p>
+                <p>Avoid hitting walls and your own body!</p>
+            </div>
+        </div>
+        <div id="game-over" class="screen hidden">
+            <h1>Game Over</h1>
+            <p>Your score: <span id="final-score">0</span></p>
+            <button id="restart-game">Restart</button>
+        </div>
+        <div id="level-complete" class="screen hidden">
+            <h1>Level Complete!</h1>
+            <button id="next-level">Continue</button>
+        </div>
+        <div id="hud" class="hidden">
+            <div id="score">Score: 0</div>
+            <div id="level">Level: 1</div>
+        </div>
+    </div>
+</body>
+</html>
